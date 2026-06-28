@@ -2,7 +2,7 @@
 ###Autor: Albert Garcia Benadi
 ###ORCID: 0000-0002-5560-4392
 ##
-##202504- This version is adpated to numpy 1.21 and python 3.11
+##202504- This version is adapted to python 3.13
 
 
 import numpy as np
@@ -325,7 +325,7 @@ if not sys.warnoptions:
 
 
 
-print('Insert the path where the raw are --for instance d:\Mrrdata/')
+print('Insert the path where the raw are --for instance d:\\Mrrdata/')
 Root=input()  #input from the user 
 os.chdir(Root)
 
@@ -334,7 +334,8 @@ dircf=glob.glob(Root+'*.raw')
 dircf=np.sort(dircf)
 print('In this folder there are '+str(len(dircf))+' raw files')
 ##print('The script generate netcdf file with the same name of raw files or include correted at the end\n')
-print('A new file with the same name but finished as -corrected is created \n')
+if len(dircf) > 0:
+    print('A new file with the same name but finished as -corrected is created \n')
 
 for name in dircf:
     
