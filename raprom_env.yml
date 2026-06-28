@@ -1,0 +1,10 @@
+name: raprom3
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - matplotlib
+  - numpy=1.19
+  - ipykernel
+prefix: /home/illich/miniconda3/envs/raprom3
