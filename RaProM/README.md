@@ -13,21 +13,13 @@ https://doi.org/10.3390/rs12244113
 
 ## Versions and dependences
 
-The main script is called RaProM.py and it is available in python 2.7., 3.8. ,and 3.11. The following libraries are necessary:
+The main script is called RaProM.py and targets Python 3.13. Older split versions have been removed.
 
-For 2.7 and 3.8. python version
+For Python 3.13:
 
-	numpy , version 1.14.5 or later until 1.19.
+	numpy, version 2.1 or later
 
-	miepython, version 1.3.0 or later (matplotlib is necessary for this library works)
-
-	netCDF4, version 1.2.7 or later(cftime is necessary for this library works)
-
-For 3.11 pyhton version
-
-	numpy , version 1.21.6
-
-	miepython, version 2.2.1 (matplotlib is necessary for this library works)
+	miepython, version 3.2 or later (matplotlib is necessary for this library works)
 
 	netCDF4, version 1.7.2 or later(cftime is necessary for this library works)
 
@@ -36,15 +28,15 @@ The script works with the MRR raw archives.
 
 The libraries can be installed with pip, using these sentences:
 
-	pip install numpy
-	pip install miepython
+	pip install "numpy>=2.1"
+	pip install "miepython>=3.2"
 	pip install netCDF4
 	pip install matplotlib
 	pip install cftime
 
 If you have already installed one of the libraries but need to change the version, you can use this syntaxis:
 
-	pip install numpy~=1.21.6
+	pip install "numpy>=2.1"
 
 ## How to cite
 
@@ -84,9 +76,9 @@ The script can be executed from a command line at the system prompt (see MS-Wind
 <br />
 ![commandWindow](https://user-images.githubusercontent.com/35369817/67784656-64703d00-fa6c-11e9-94fa-0e616d703168.JPG)
 <br />
-at the directory where RaProM_XX.py has been copied, where XX is 27, 38, or 3-11 in function of your python version:
+at the directory where RaProM.py has been copied:
 ```
-python RaProM_XX.py
+python RaProM.py
 
 ```
 
@@ -99,12 +91,12 @@ The script has some additional command line execution options. Please note that 
 
 The syntax of these options are:
 ```
-python RaProM_XX.py -h100.8
+python RaProM.py -h100.8
 
 ```
 This example forces the antenna height to be at 100.8 m above sea level.<br />
 ```
-python RaProM_XX.py -M0.78
+python RaProM.py -M0.78
 
 ```
 This example assumes a multiplicative bias of 0.87 between MRR2 and reference rainfall.<br />
@@ -124,7 +116,7 @@ The script indicates the number of raw files in the folder and starts the proces
 The result is stored in a netcdf file with the same name but finished "-processed"
 
 ## Do you have any problem with your data?
-If so, your RAW files may be corrupted. There is a new script for this called CorrecRawFiles-py_XX.py .
+If so, your RAW files may be corrupted. There is a new script for this called CorrecRawFiles.py .
 This script analyses every line in the original RAW file and fixes it. If errors are found, a new file with 
 the same name but finished as -corrected will be created.
 To execute the script follow the same steps described above.

@@ -1,8 +1,9 @@
-###script for process the raw data from Mrr radar of Mettek
+###script for process the raw data from Mrr2 radar of Mettek
 ###Autor: Albert Garcia Benadi
 ###ORCID: 0000-0002-5560-4392
 ##202411- The new version includes the improve definitions and the M value to adjust the calibration constant
 ##      - The new version includes the modification the calculation of Ze, including the speed resolution.
+##202504- This version is adapted to python 3.13
 
 
 
@@ -12,7 +13,7 @@ import datetime
 import time
 import miepython as mp
 from math import e
-from netCDF4 import Dataset,num2date,date2num
+from netCDF4 import Dataset,date2num
 import glob
 import os
 import sys
@@ -131,7 +132,7 @@ def Rain_Par(state,Z,LWC,RR,Nw,Dm,NewM,D,N_da,NdE,he,w,Pia):
 
             value=np.nansum(np.prod([np.power(D[m],6),LastN,dif2],axis=0))
             value2=np.nansum(np.prod([np.power(D[m],3),LastN,dif2],axis=0))
-            value3=np.nansum(np.prod([np.power(D[m],3),LastN,dif2,w[m]],axis=0))
+            value3=np.nansum(np.prod([np.power(D[m],3),LastN,dif2],axis=0))*w[m]
             value4=np.nansum(np.prod([np.power(D[m],4),LastN,dif2],axis=0))
                 
             if np.nansum(nde)<=0.:
@@ -1141,7 +1142,7 @@ def Process(matrix,he,temps,D):#This is the core from the preocessing
 
                 value=np.nansum(np.prod([np.power(D[m],6),LastN,dif2],axis=0))
                 value2=np.nansum(np.prod([np.power(D[m],3),LastN,dif2],axis=0))
-                value3=np.nansum(np.prod([np.power(D[m],3),LastN,dif2,w],axis=0))
+                value3=np.nansum(np.prod([np.power(D[m],3),LastN,dif2],axis=0)*w)
                 value4=np.nansum(np.prod([np.power(D[m],4),LastN,dif2],axis=0))
                 
                 if np.nansum(nde)<=0.:
@@ -1257,7 +1258,7 @@ def Process(matrix,he,temps,D):#This is the core from the preocessing
                             state[m]=0.
                     
                 Mmixed.append(NewM[m])
-                Value=10**18*lamb**4*np.nansum(NewM[m])/(np.pi**5*K2w)
+                Value=10**18*lamb**4*Deltav*np.nansum(NewM[m])/(np.pi**5*K2w)
                 
                 Z_da.append(np.nan)
                 lwc.append(np.nan)
@@ -1303,7 +1304,7 @@ def Process(matrix,he,temps,D):#This is the core from the preocessing
                 Munk.append(NewM[m])
                 
                 
-                Value=10**18*lamb**4*np.nansum(NewM[m])/(np.pi**5*K2w)#use the rayleight estimation
+                Value=10**18*lamb**4*Deltav*np.nansum(NewM[m])/(np.pi**5*K2w)#use the rayleight estimation
                 
                 Z_da.append(np.nan)
                 lwc.append(np.nan)
@@ -1582,7 +1583,6 @@ Deltav=Deltaf*lamb/2.
 Ocurrence=50.#value in % of ocurrence in the averaging matrix
 
 
-
 if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
@@ -1590,8 +1590,8 @@ if not sys.warnoptions:
 
 
 
-print('Insert the path where the raw are --for instance d:\Mrrdata/')
-Root=raw_input()  #input from the user 
+print('Insert the path where the raw are --for instance d:\\Mrrdata/')
+Root=input()  #input from the user 
 os.chdir(Root)
 
 ########INCLUDE THE OPTIONS IN EXECUTATION
@@ -1601,7 +1601,6 @@ if len(sys.argv)==1:
 h0_opt=np.nan;Adjust_M=1.#c_opt=0;c1=0;c2=0;c3=0;h0_opt=np.nan
 if len(sys.argv)>1:
     for i in sys.argv:
-   
 
         if i[0:2]=='-h':
             #print('The first height has been changed\n')
@@ -1609,15 +1608,16 @@ if len(sys.argv)>1:
         if i[0:2]=='-M':
             #print('The calibration constant has been changed\n')
             Adjust_M=float(i[2:])
+##            print('M value',Adjust_M)
 
 if ~np.isnan(h0_opt):
-    print('\nThe antenna height has been changed to ',str(h0_opt),'\n')
+    print('\nThe antenna height has been changed to ',str(h0_opt),' m\n')
 
 if Adjust_M!=1.:
     print('\nThe calibration constant has been adjusted by M ',str(Adjust_M),' m\n')
 
 print('Insert the number of seconds for integration (usually 60 seconds)')
-IntTime=raw_input()
+IntTime=input()
 IntTime=int(IntTime)
 
 folder=Root
@@ -1646,13 +1646,12 @@ for name in dircf:
     Hini=Hini.strip()
     HIcolum=Hini.split()
     HIcolum=map(int,HIcolum[1:len(HIcolum)])#Get the height values and change to integer
-    HIcolum2=np.fromiter(HIcolum,dtype=np.int)
     if np.isnan(h0_opt):
-        HIcolum2=np.fromiter(HIcolum,dtype=np.int)
+        HIcolum2=np.fromiter(HIcolum,dtype=int)
     else:
-        HIcolum2=h0_opt+np.fromiter(HIcolum,dtype=np.int)
+        HIcolum2=h0_opt+np.fromiter(HIcolum,dtype=int)
 
-
+##    print('altures',HIcolum2)
     ##Found the parameters dv in function of the height (mrr physics equation)
     dv=[]
     for i in range(len(HIcolum2)):
@@ -1682,12 +1681,25 @@ for name in dircf:
         D.append(d)#dimension 31 x 64 in mm
 
 
-    dataset=Dataset(filenameplot+'.nc','w',format='NETCDF4')
+    dataset=Dataset(str(filenameplot+'.nc'),mode='w',format='NETCDF4')
     dataset.description='Data processed by MRR radar'
     dataset.author='Albert Garcia Benad'+u'\xed'
     dataset.orcid='0000-0002-5560-4392 '
     if Adjust_M!=1.:
         dataset.Adjust_M='The MRR calibration constant has been adjusted with the multiplicative bias M='+str(Adjust_M)
+    # if not Site:
+    #     dataset.site='Undefined'
+    # else:
+    #     dataset.site=Site
+    # if not Latitude:
+    #     dataset.latitude='Undefined'
+
+    # else:
+    #     dataset.latitude=Latitude
+    # if not Longitude:
+    #     dataset.longitude='Undefined'
+    # else:
+    #     dataset.longitude=Longitude
 
 
     dataset.createDimension('DropSize',len(D[0]))
@@ -1733,6 +1745,7 @@ for name in dircf:
         nc_ranges_H_BB.description = 'Height a.g.l.'
     else:
         nc_ranges_H_BB.description = 'Height a.s.l.'
+    
 
 
 
@@ -1919,9 +1932,10 @@ for name in dircf:
         Hcolum=H.split()
         Hcolum=map(int,Hcolum[1:len(Hcolum)])#Get the height values and change to integer
         if np.isnan(h0_opt):
-            Harray=np.fromiter(Hcolum,dtype=np.int)
+            Harray=np.fromiter(Hcolum,dtype=int)
         else:
-            Harray=h0_opt+np.fromiter(Hcolum,dtype=np.int)
+            Harray=h0_opt+np.fromiter(Hcolum,dtype=int)
+##        Harray=np.fromiter(Hcolum,dtype=int)
         DeltaH=Harray[5]-Harray[4]#Height difference
 
         #Read the tranference function (third line from raw file)
@@ -1929,11 +1943,11 @@ for name in dircf:
         FT=FT.strip()
         FTcolum=FT.split()
         FTcolum=map(float,FTcolum[1:len(FTcolum)])
-        FTarray=np.fromiter(FTcolum,dtype=np.float)
+        FTarray=np.fromiter(FTcolum,dtype=float)
         vectorV=np.arange(0,64*fNy,fNy)
         
 
-        #constant value to conevrt F to f, include all constants
+        #constant value to conevrt F to f, include all constants, and the possible correction from M
         Cte=DeltaH*float(CC)/(Adjust_M*10**20)
         
         
@@ -1949,7 +1963,7 @@ for name in dircf:
             Data=Data.strip()
             Data=Data.split()
             Dades1=map(int,Data[1:len(Data)]) #extract the title for eac line F00, F01, etc
-            Dades=np.fromiter(Dades1,dtype=np.int)
+            Dades=np.fromiter(Dades1,dtype=int)
 
             
             FQ.append(Data[0])
@@ -2093,7 +2107,7 @@ for name in dircf:
                     nc_bb_top.description='Bright Band top height a.g.l.'
                 else:
                     nc_bb_top.description='Bright Band top height a.s.l.'
-
+                
                 nc_bb_top.units='m'
 
 
