@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raprom"
+version = "0.1.0"
+description = "MRR2 raw radar processing tools"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.1",
+    "matplotlib",
+    "miepython>=3.2",
+    "netCDF4>=1.7.2",
+    "cftime",
+]
+
+[project.scripts]
+raprom = "raprom.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["raprom*"]
