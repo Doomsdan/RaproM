@@ -16,8 +16,15 @@ dependencies = [
     "cftime",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
 [project.scripts]
 raprom = "raprom.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["raprom*"]
+
+[tool.pytest.ini_options]
+addopts = "--basetemp=.pytest_tmp"
+testpaths = ["tests"]
