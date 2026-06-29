@@ -118,7 +118,8 @@ The result is stored in a netcdf file with the same name but finished "-processe
 ## Do you have any problem with your data?
 If so, your RAW files may be corrupted. There is a new script for this called CorrecRawFiles.py .
 This script analyses every line in the original RAW file and fixes it. If errors are found, a new file with 
-the same name but finished as -corrected will be created.
+the same name but finished as -corrected will be created in a `CorrectedRaw` output folder. The original RAW
+files are left unchanged.
 To execute the script follow the same steps described above.
 
 ## Contact

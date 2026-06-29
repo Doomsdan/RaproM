@@ -25,6 +25,9 @@ Nur Raw-Dateien korrigieren:
 raprom correct "D:\Mrrdata"
 ```
 
+Korrigierte Dateien werden in `D:\Mrrdata\CorrectedRaw` geschrieben. Die
+Originaldateien bleiben unveraendert im Eingabeordner.
+
 Optionen aus dem alten Skript sind als CLI-Flags verfuegbar:
 
 ```powershell
