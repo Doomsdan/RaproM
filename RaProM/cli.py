@@ -67,6 +67,17 @@ def build_parser():
     add_logging_options(correct, default=argparse.SUPPRESS)
     correct.add_argument("path", help="Folder containing .raw files.")
 
+    benchmark = subparsers.add_parser("benchmark", help="Process one .raw file and optionally compare it to a reference NetCDF.")
+    add_logging_options(benchmark, default=argparse.SUPPRESS)
+    benchmark.add_argument("raw_file", help="Raw file to process.")
+    benchmark.add_argument("-i", "--integration-time", type=int, required=True, help="Integration time in seconds, usually 60.")
+    benchmark.add_argument("--reference", default=None, help="Reference NetCDF file that must match exactly.")
+    benchmark.add_argument("--repeats", type=int, default=1, help="Number of processing runs.")
+    benchmark.add_argument("--antenna-height", "-H", type=float, default=np.nan, help="Antenna height in meters.")
+    benchmark.add_argument("-M", "--adjust-m", type=float, default=1.0, help="Multiplicative calibration bias M.")
+    benchmark.add_argument("-o", "--output-dir", default=None, help="Folder for benchmark outputs.")
+    benchmark.add_argument("--correct", action="store_true", default=False, help="Correct raw file before processing.")
+
     parser.set_defaults(command="process")
     return parser
 
@@ -86,6 +97,27 @@ def main(argv=None):
             logger.info("Corrected files are written to the CorrectedRaw output folder; original raw files are left unchanged.")
         for raw_file in raw_files:
             CorrectorFile(str(raw_file))
+        return 0
+
+    if args.command == "benchmark":
+        from .benchmark import benchmark_raw_file
+
+        runs = benchmark_raw_file(
+            args.raw_file,
+            args.integration_time,
+            antenna_height=args.antenna_height,
+            adjust_m=args.adjust_m,
+            correct=args.correct,
+            reference_netcdf=args.reference,
+            repeats=args.repeats,
+            output_dir=args.output_dir,
+        )
+        for index, run in enumerate(runs, start=1):
+            logger.info("Benchmark run %s: %.3f s -> %s", index, run.elapsed_seconds, run.output_path)
+            if run.differences:
+                for difference in run.differences:
+                    logger.error("Reference mismatch: %s", difference)
+                return 1
         return 0
 
     from .netcdf import process_directory

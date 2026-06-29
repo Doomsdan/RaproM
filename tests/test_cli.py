@@ -34,3 +34,23 @@ output_dir = "D:/Mrrdata/Processed"
     assert captured["adjust_m"] == 1.0
     assert captured["correct"] is True
     assert captured["output_dir"] == "D:/Mrrdata/Processed"
+
+
+def test_benchmark_command_fails_on_reference_drift(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeRun:
+        elapsed_seconds = 1.25
+        output_path = tmp_path / "candidate.nc"
+        differences = ("RR: data differ",)
+
+    def fake_benchmark_raw_file(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return [FakeRun()]
+
+    monkeypatch.setattr("raprom.benchmark.benchmark_raw_file", fake_benchmark_raw_file)
+
+    assert cli.main(["benchmark", "sample.raw", "-i", "60", "--reference", "reference.nc"]) == 1
+    assert captured["args"] == ("sample.raw", 60)
+    assert captured["kwargs"]["reference_netcdf"] == "reference.nc"

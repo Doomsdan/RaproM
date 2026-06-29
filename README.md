@@ -73,6 +73,19 @@ raprom process "D:\Mrrdata" -i 60 --log-file raprom.log
 Mehr Details gibt es mit `-v`, Debug-Ausgaben mit `-vv`. Mit `--quiet` werden
 nur Warnungen und Fehler angezeigt.
 
+## Performance-Regressionen pruefen
+
+Fuer Optimierungen kann eine einzelne Raw-Datei verarbeitet und gegen eine
+bekannte NetCDF-Referenz exakt verglichen werden:
+
+```powershell
+raprom benchmark "D:\Mrrdata\0101.raw" -i 60 --reference "D:\Mrrdata\0101-processed.nc" --output-dir ".\benchmark-output"
+```
+
+Der Befehl endet mit Fehlercode `1`, sobald Dimensionen, Variablen, Attribute
+oder Datenwerte abweichen. NaN-Werte gelten nur dann als gleich, wenn sie an
+denselben Positionen stehen.
+
 ## GUI-Prototyp
 
 Eine einfache Desktop-Oberflaeche kann nach der Installation gestartet werden:
