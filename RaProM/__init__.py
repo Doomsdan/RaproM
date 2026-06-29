@@ -1,6 +1,10 @@
 """RaProM: processing tools for MRR2 radar raw data."""
 
+import logging
+
 __all__ = ["CorrectorFile", "process_directory", "process_raw_file"]
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 def __getattr__(name):

@@ -3,7 +3,7 @@
 from pathlib import Path
 import datetime
 import glob
-import sys
+import logging
 
 import numpy as np
 from netCDF4 import Dataset, date2num
@@ -11,6 +11,8 @@ from netCDF4 import Dataset, date2num
 from . import processing
 from .correction import CorrectorFile
 from .processing import *
+
+logger = logging.getLogger(__name__)
 
 
 def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True):
@@ -30,7 +32,7 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     count=0
     if correct:
         NameFile=CorrectorFile(NameFile)
-    print('File in process  '+str(NameFile[:-4]))
+    logger.info("Processing raw file: %s", NameFile)
     filenameplot=NameFile[:-4]+'-processed'
 
     f=open(NameFile,'r')
@@ -196,42 +198,12 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     TimeCounter=0
     Cont=0
     #START THE DATA READING
-    print(datetime.datetime.now())
+    started_at = datetime.datetime.now()
+    logger.info("Started NetCDF conversion for %s at %s", NameFile, started_at.isoformat(timespec="seconds"))
     ContPlot=0
-    countwork=0
 
 
     while 1:
-        
-        
-        if countwork==7:
-            sys.stdout.write('\b\b\b\b\b\b\b-------\r')
-            countwork=0
-        if countwork==0:
-            sys.stdout.write('working')
-            
-        if countwork==6:
-            sys.stdout.write('\b\b\b\b\b\b\bw-rking\r')
-        
-        if countwork==5:
-            sys.stdout.write('\b\b\b\b\b\b\bwo-king\r')
-        
-        if countwork==4:
-            sys.stdout.write('\b\b\b\b\b\b\bwor-ing\r')
-        
-        if countwork==3:
-            sys.stdout.write('\b\b\b\b\b\b\bwork-ng\r')
-        
-        if countwork==2:
-            sys.stdout.write('\b\b\b\b\b\b\bworki-g\r')
-        
-        if countwork==1:
-            sys.stdout.write('\b\b\b\b\b\b\bworkin-\r')
-        
-        countwork+=1
-            
-        
-        
         line=f.readline()
 
         line=line.strip()
@@ -559,6 +531,8 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
             
 
             Timecount=Timecount+1
+            if Timecount == 1 or Timecount % 10 == 0:
+                logger.debug("Processed %s time interval(s) from %s", Timecount, NameFile)
             
             
         PotCorrSum.append(Pot)#add matrix
@@ -588,19 +562,23 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
         nc_TypePrecipitation.units='none'
 
         nc_TypePrecipitation[:,:]=np.array(np.ma.masked_invalid(PrepTypeC),dtype='f')
-    print(datetime.datetime.now())
-    print('\r\n')
-
     dataset.close()
-    return str(Path(filenameplot + '.nc'))
+    output_path = str(Path(filenameplot + '.nc'))
+    logger.info(
+        "Finished NetCDF conversion for %s: %s (%s time interval(s))",
+        NameFile,
+        output_path,
+        Timecount,
+    )
+    return output_path
 
 
 def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True):
     """Process every ``.raw`` file in *root* and return generated NetCDF paths."""
     root_path = Path(root)
     raw_files = sorted(glob.glob(str(root_path / '*.raw')))
-    print('In this folder there are '+str(len(raw_files))+' raw files')
-    print('The script generate netcdf file with the same name of raw files\n')
+    logger.info("Found %s raw file(s) in %s", len(raw_files), root_path)
+    logger.info("Generated NetCDF files use the source raw filename with a '-processed.nc' suffix.")
     outputs = []
     for raw_file in raw_files:
         outputs.append(process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct))
