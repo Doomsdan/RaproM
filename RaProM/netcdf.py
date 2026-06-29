@@ -58,12 +58,11 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     Hini=f.readline()
     f.close()
     Hini=Hini.strip()
-    HIcolum=Hini.split()
-    HIcolum=map(int,HIcolum[1:len(HIcolum)])#Get the height values and change to integer
+    HIcolum=np.fromstring(Hini.partition(" ")[2],dtype=int,sep=" ")#Get the height values and change to integer
     if np.isnan(h0_opt):
-        HIcolum2=np.fromiter(HIcolum,dtype=int)
+        HIcolum2=HIcolum
     else:
-        HIcolum2=h0_opt+np.fromiter(HIcolum,dtype=int)
+        HIcolum2=h0_opt+HIcolum
 
     ##    print('altures',HIcolum2)
     ##Found the parameters dv in function of the height (mrr physics equation)
@@ -318,21 +317,18 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
         #Read the heigh parameters (second line from raw file)
         H=f.readline()
         H=H.strip()
-        Hcolum=H.split()
-        Hcolum=map(int,Hcolum[1:len(Hcolum)])#Get the height values and change to integer
+        Hcolum=np.fromstring(H.partition(" ")[2],dtype=int,sep=" ")#Get the height values and change to integer
         if np.isnan(h0_opt):
-            Harray=np.fromiter(Hcolum,dtype=int)
+            Harray=Hcolum
         else:
-            Harray=h0_opt+np.fromiter(Hcolum,dtype=int)
+            Harray=h0_opt+Hcolum
     ##        Harray=np.fromiter(Hcolum,dtype=int)
         DeltaH=Harray[5]-Harray[4]#Height difference
 
         #Read the tranference function (third line from raw file)
         FT=f.readline()
         FT=FT.strip()
-        FTcolum=FT.split()
-        FTcolum=map(float,FTcolum[1:len(FTcolum)])
-        FTarray=np.fromiter(FTcolum,dtype=float)
+        FTarray=np.fromstring(FT.partition(" ")[2],dtype=float,sep=" ")
         vectorV=np.arange(0,64*fNy,fNy)
         
 
@@ -359,16 +355,10 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
             FQ.append(Data[0])
             DataT.append(Dades)
             
-        Pot=[]
-        
-        
-
-        for k in range(len(Harray)):#the result is  amtrix crrected by transfer function and height, and dimension (LenHcolum)-1)
-            COL=[row[k] for row in DataT]
-
-            if k>=1:
-                quo=FTarray[k]/(k**2)
-                Pot.append(np.divide(COL,quo))#pot is the spectra potence (v,i) except by muliply a constant where eac array is a column, or gate height
+        data_matrix=np.asarray(DataT,dtype=float)
+        height_indices=np.arange(1,len(Harray),dtype=float)
+        quotients=FTarray[1:]/np.square(height_indices)
+        Pot=(data_matrix[:,1:].T/quotients[:,None])#pot is the spectra potence (v,i) except by muliply a constant where eac array is a column, or gate height
 
 
         hcor=np.asarray(Harray[1:])

@@ -2,14 +2,25 @@
 
 import calendar
 import datetime
+from functools import lru_cache
 from math import e
 
 import miepython as mp
 import numpy as np
 
 
+@lru_cache(maxsize=8192)
+def _mie_efficiencies_cached(m_real, m_imag, x):
+    m = complex(m_real, m_imag)
+    if hasattr(mp, "mie"):
+        return mp.mie(m, x)
+    return mp.efficiencies_mx(m, x)
+
+
 def mie_efficiencies(m, x):
     """Return Mie efficiencies across supported miepython versions."""
+    if np.ndim(x)==0:
+        return _mie_efficiencies_cached(float(np.real(m)), float(np.imag(m)), float(x))
     if hasattr(mp, "mie"):
         return mp.mie(m, x)
     return mp.efficiencies_mx(m, x)
@@ -17,60 +28,38 @@ def mie_efficiencies(m, x):
 
 def PrepType(dm,nw):
 ##    convert the matrix dm, nw in  linear vector
-    Nw=[];Dm=[]
+    Dm=np.asarray(dm,dtype=float).ravel()
+    Nw=np.asarray(nw,dtype=float).ravel()
+    valid=(~np.isnan(Dm)) & (~np.isnan(Nw))
+    Dm=Dm[valid]
+    Nw=Nw[valid]
 
-    for i in range(len(nw)):
-        vector=nw[i]
-        for j in range(len(vector)):
-            if ~np.isnan(nw[i][j]) and ~np.isnan(dm[i][j]): 
-                Nw.append(nw[i][j])
-                Dm.append(dm[i][j])
-    
-    Dm=np.asarray(Dm,dtype=float)
-    Nw=np.asarray(Nw,dtype=float)
-    Dm2=[];Nw2=[];Y2=[]
-    for i in range(len(Dm)):
-        if ~np.isnan(Dm[i])and ~np.isnan(Nw[i]):
-            y=6.3-1.6*Dm[i]
-            ThuInd=Nw[i]-y#thurai(2016) index from https://doi.org/10.1016/j.atmosres.2015.04.011
-            Dm2.append(round(Dm[i],1))
-            Nw2.append(round(Nw[i],1))
-            Y2.append(round(ThuInd,1))
+    Dm2=np.round(Dm,1)
+    Nw2=np.round(Nw,1)
+    Y2=np.round(Nw-(6.3-1.6*Dm),1)#thurai(2016) index from https://doi.org/10.1016/j.atmosres.2015.04.011
                        
 
     Dm_axes=np.arange(np.min(Dm2),np.max(Dm2),.1)
     Nw_axes=np.arange(np.min(Nw2),np.max(Nw2),.1)
-    dm_axes=[];nw_axes=[]
-    for i in range(len(Dm_axes)):
-        dm_axes.append(round(Dm_axes[i],1))
-    for i in range(len(Nw_axes)):
-        nw_axes.append(round(Nw_axes[i],1))
+    dm_axes=np.round(Dm_axes,1).tolist()
+    nw_axes=np.round(Nw_axes,1).tolist()
 
     Matrix=np.ones((len(dm_axes),len(nw_axes)))*np.nan
 ##    Create the matrix results Stra, Trans and Convective
-    for i in range(len(dm_axes)):
-        for j in range(len(Dm2)):
-
-            if dm_axes[i]==Dm2[j]:
-
-                for k in range(len(nw_axes)):
-
-                    if nw_axes[k]==Nw2[j]:
-
-                        Matrix[i][k]=Y2[j]
+    dm_index={value:index for index,value in enumerate(dm_axes)}
+    nw_index={value:index for index,value in enumerate(nw_axes)}
+    for dm_value,nw_value,y_value in zip(Dm2,Nw2,Y2):
+        i=dm_index.get(dm_value)
+        k=nw_index.get(nw_value)
+        if i is not None and k is not None:
+            Matrix[i,k]=y_value
 
 ##    Matrix is the matrix with the values de index Thurai(2016) https://doi.org/10.1016/j.atmosres.2015.04.011
 ##now give the values from precypitation type where convective is 1, transition is 0 and stratiform is -1
-    for i in range(len(Matrix)):
-        for j in range(len(Matrix[i])):
-            if ~np.isnan(Matrix[i][j]):
-                if abs(Matrix[i][j])<=0.3:
-                    Matrix[i][j]=0.#transtition
-                else:
-                    if Matrix[i][j]<-0.3:
-                        Matrix[i][j]=-5.#stratiform
-                    if Matrix[i][j]>0.3:
-                        Matrix[i][j]=5.#convective
+    valid_matrix=~np.isnan(Matrix)
+    Matrix[valid_matrix & (np.abs(Matrix)<=0.3)]=0.#transtition
+    Matrix[valid_matrix & (Matrix<-0.3)]=-5.#stratiform
+    Matrix[valid_matrix & (Matrix>0.3)]=5.#convective
     
 
     return dm_axes,nw_axes,Matrix
@@ -290,37 +279,16 @@ def BB(v,Z,h):#the input are fall speed, equivalent reflectivity and height
 
 
 def Promig(vector):
+    spectra=np.asarray(vector,dtype=float)
+    if spectra.size==0:
+        return np.ones((31,64),dtype=float)*np.nan
 
-    rep=len(vector)
-    Out=[] 
-    for i in range(31):
-        H=[]
-        T=[]
-        for j in range(rep):
-            h1=vector[j]
-
-            h2=h1[i]
-
-            H.append(h2) 
-    
-        for j in range(64):
-            S=[]
-            for k in range(rep):
-                h3=H[k]
-            
-                h4=h3[j]
-            
-                S.append(h4)
-        
-            NoNul=np.count_nonzero(S)
-            if NoNul>len(S)/(100./Ocurrence):
-                Sum=float(np.sum(S))/float(NoNul)
-            else:
-                Sum=np.nan
-        
-            T.append(Sum)
-        Out.append(T)
-    return np.asarray(Out)
+    no_nul=np.count_nonzero(spectra,axis=0)
+    sums=np.sum(spectra,axis=0)
+    out=np.full(sums.shape,np.nan,dtype=float)
+    valid=no_nul>len(spectra)/(100./Ocurrence)
+    np.divide(sums,no_nul,out=out,where=valid)
+    return out
 
 
 def group(a,indexcentral,Nnan,d):
@@ -1293,39 +1261,28 @@ def Parameters(n,d,v,da):#the differences between diameter aren't constant
     
     roW=10**6 #water density g/m3
     for i in range(len(n)):
-        D=d[i]
-        N=n[i]
-        w=v[i]
-        dif=[]
+        D=np.asarray(d[i],dtype=float)
+        N=np.asarray(n[i],dtype=float)
+        w=np.asarray(v[i],dtype=float)
         
         
         if da==1:#the code is in dealiased axes
-            for m in range(len(D)):
-                if m==0 or m==len(D)-1:
-                    if m==0:
-                        dif.append(d[i][m+1]-d[i][m])
-                    if m==len(D)-1:
-                        dif.append(abs(d[i][m-1]-d[i][m]))
-                else:
-                    if m<len(w)/2.:
-                        dif.append((d[i][m+1]-d[i][m]))
-                    else:
-                        dif.append(abs((d[i][m]-d[i][m+1])))
+            dif=np.empty_like(D,dtype=float)
+            dif[0]=D[1]-D[0]
+            dif[-1]=abs(D[-2]-D[-1])
+            middle=np.arange(1,len(D)-1)
+            left_half=middle < len(w)/2.
+            dif[middle[left_half]]=D[middle[left_half]+1]-D[middle[left_half]]
+            dif[middle[~left_half]]=np.abs(D[middle[~left_half]]-D[middle[~left_half]+1])
 
         else:
-            
-            for m in range(len(D)):
-
-                if m==0 or m==len(D)-1:
-                    if m==0:
-                        dif.append(d[i][m+1]-d[i][m])
-                    if m==len(D)-1:
-                        dif.append(d[i][m]-d[i][m-1])
-                else:
-                    dif.append((d[i][m+1]-d[i][m]))
-        value=np.nansum(np.prod([np.power(D,6),N,dif],axis=0))
-        value2=np.nansum(np.prod([np.power(D,3),N,dif],axis=0))
-        value3=np.nansum(np.prod([np.power(D,3),N,dif,w],axis=0))
+            dif=np.empty_like(D,dtype=float)
+            dif[:-1]=D[1:]-D[:-1]
+            dif[-1]=D[-1]-D[-2]
+        D3=np.power(D,3)
+        value=np.nansum(D3*D3*N*dif)
+        value2=np.nansum(D3*N*dif)
+        value3=np.nansum(D3*N*dif*w)
         if value==0.:
             Z.append(np.nan)
             ze.append(np.nan)
@@ -1346,24 +1303,16 @@ def Parameters(n,d,v,da):#the differences between diameter aren't constant
 def FindRealPeaks(matrix):#function to detect real peaks, wherein a peak has a minimum 3 consecutives values
     Matrix=[]
     for i in range(len(matrix)):
-        vector=matrix[i]
+        vector=np.asarray(matrix[i])
         Vector=np.ones(shape=(len(vector)))*np.nan
-        Ind=np.argwhere(~np.isnan(vector))
-
-        out=group_consecutives(Ind)
-
-        Out=[]
-        for j in range(len(out)):
-            if len(out[j])>=3:
-                Out.append(out[j])
-        
-        if len(Out)>0:
-            for j in range(len(Out)):
-                value=Out[j]
-                for k in range(len(value)):
-                    np.put(Vector,value[k],vector[value[k]])
-        
-            
+        valid=~np.isnan(vector)
+        if valid.any():
+            edges=np.diff(np.concatenate(([False],valid,[False])).astype(int))
+            starts=np.flatnonzero(edges==1)
+            stops=np.flatnonzero(edges==-1)
+            for start,stop in zip(starts,stops):
+                if stop-start>=3:
+                    Vector[start:stop]=vector[start:stop]
         Matrix.append(Vector)
                     
         
@@ -1419,25 +1368,24 @@ def HildrenS(matrix):
         else:
                 
             indMax=Peak(v)
-            VMAX=[]
-            for m in range(len(indMax)):
-                Vmax=v[indMax[m]]
-                VMAX.append(Vmax)
-
-            maxim=np.argmax(VMAX)
+            maxim=indMax[np.nanargmax(v[indMax])]
         
             
-            v[v>v[indMax[maxim]]]=np.nan
+            v[v>v[maxim]]=np.nan
             PotWithOutHS.append(v)
             
             condition=1
             while condition:
-                if (np.power(np.nanmean(v),2)/np.nanvar(v))>58 or np.nanvar(v)==0.:
-                    soroll=np.nanmean(v)
+                meanv=np.nanmean(v)
+                varv=np.nanvar(v)
+                if (np.power(meanv,2)/varv)>58 or varv==0.:
+                    soroll=meanv
                     condition=0
 
-                np.put(v2,np.nanargmax(v),np.nanmax(v))
-                np.put(v,np.nanargmax(v),np.nan)
+                max_index=np.nanargmax(v)
+                max_value=v[max_index]
+                np.put(v2,max_index,max_value)
+                np.put(v,max_index,np.nan)
         v2[v2<=1.2*soroll]=np.nan#Record the signal up 1.2 the noise level found
 
         Noise.append(soroll)
@@ -1457,17 +1405,10 @@ def unix2date(unix):
     return datetime.datetime.utcfromtimestamp(unix)
 
 def Peak(vector):
-    InMax=[]
-    
-    L=len(vector)
-    for i in range(L):
-        j=i+1
-        if j<(L-1):
-            if vector[j]>=vector[j+1] and vector[j]>=vector[j-1]:
-                InMax.append(j)
-                
-    
-    return InMax 
+    vector=np.asarray(vector)
+    if len(vector)<3:
+        return []
+    return np.flatnonzero((vector[1:-1]>=vector[2:]) & (vector[1:-1]>=vector[:-2]))+1
 
 
 
