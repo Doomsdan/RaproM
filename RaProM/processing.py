@@ -7,6 +7,14 @@ from math import e
 import miepython as mp
 import numpy as np
 
+
+def mie_efficiencies(m, x):
+    """Return Mie efficiencies across supported miepython versions."""
+    if hasattr(mp, "mie"):
+        return mp.mie(m, x)
+    return mp.efficiencies_mx(m, x)
+
+
 def PrepType(dm,nw):
 ##    convert the matrix dm, nw in  linear vector
     Nw=[];Dm=[]
@@ -1381,7 +1389,7 @@ def ScatExt(diameter,longW):#for 1 height gate
         else:
             
             x = 2*np.pi*r/ag_lam;#is non dimension, so the ag_lam and r have the same units
-            qext, qsca, qback, g = mp.mie(m,x)
+            qext, qsca, qback, g = mie_efficiencies(m,x)
             absorb  = (qext - qsca) * np.pi * r**2
             scatt.append(qsca * np.pi * r**2)
             extinct.append(qext* np.pi * r**2)
@@ -1471,6 +1479,10 @@ lamb=velc/(24.23*1e9)  #The frequency of radar is 24.23 GHz, units from lamb m
 ag_lam=lamb
 fsampling=125000#Hz frequencu sampling
 fNy=fsampling*lamb/(2*2*32*64) 
+speed=np.arange(0,64*fNy,fNy)
+speed21=np.arange(0,32*fNy,fNy)
+speed22=np.arange(-32*fNy,0,fNy)
+speed2=np.concatenate((speed21,speed22),axis=0)
 K2w=0.92
 K2i=0.18
 K2s=np.mean((K2w,K2i))

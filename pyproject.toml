@@ -23,6 +23,7 @@ test = ["pytest>=8"]
 
 [project.scripts]
 raprom = "raprom.cli:main"
+raprom-gui = "raprom.gui:main"
 
 [tool.setuptools.packages.find]
 include = ["raprom*"]

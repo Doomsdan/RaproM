@@ -4,6 +4,7 @@ from pathlib import Path
 import datetime
 import glob
 import logging
+import time
 
 import numpy as np
 from netCDF4 import Dataset, date2num
@@ -13,6 +14,13 @@ from .correction import CorrectorFile
 from .processing import *
 
 logger = logging.getLogger(__name__)
+
+
+def _format_progress_bytes(position, total):
+    if not total:
+        return "unknown size"
+    percent = min(100.0, (position / total) * 100.0)
+    return f"{position / 1024 / 1024:.1f}/{total / 1024 / 1024:.1f} MB ({percent:.1f}%)"
 
 
 def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
@@ -31,8 +39,11 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
 
     count=0
     if correct:
+        logger.info("Correcting raw file before processing: %s", NameFile)
         NameFile=CorrectorFile(NameFile)
+        logger.info("Finished raw-file correction: %s", NameFile)
     logger.info("Processing raw file: %s", NameFile)
+    source_size = Path(NameFile).stat().st_size
     source_stem = Path(NameFile).stem
     if output_dir is None:
         filenameplot = str(Path(NameFile).with_suffix('')) + '-processed'
@@ -205,6 +216,8 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     Cont=0
     #START THE DATA READING
     started_at = datetime.datetime.now()
+    started_monotonic = time.monotonic()
+    last_progress_log = started_monotonic
     logger.info("Started NetCDF conversion for %s at %s", NameFile, started_at.isoformat(timespec="seconds"))
     ContPlot=0
 
@@ -537,7 +550,17 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
             
 
             Timecount=Timecount+1
-            if Timecount == 1 or Timecount % 10 == 0:
+            now = time.monotonic()
+            if Timecount == 1 or now - last_progress_log >= 30:
+                logger.info(
+                    "Still processing %s: read %s, generated %s time interval(s), elapsed %.1f min",
+                    NameFile,
+                    _format_progress_bytes(f.tell(), source_size),
+                    Timecount,
+                    (now - started_monotonic) / 60.0,
+                )
+                last_progress_log = now
+            elif Timecount % 10 == 0:
                 logger.debug("Processed %s time interval(s) from %s", Timecount, NameFile)
             
             

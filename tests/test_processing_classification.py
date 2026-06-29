@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
+import raprom.processing as processing
 from raprom.processing import CheckType, PrepType
 
 
@@ -81,3 +82,20 @@ def test_check_type_converts_rain_above_bright_band_to_solid_and_clears_rain_fie
     assert np.isnan(checked_dm[2])
     assert np.isnan(checked_lwc[2])
     assert np.isnan(checked_rr[2])
+
+
+def test_mie_efficiencies_supports_new_miepython_api(monkeypatch):
+    class NewMieApi:
+        @staticmethod
+        def efficiencies_mx(_m, _x):
+            return 1.0, 2.0, 3.0, 4.0
+
+    monkeypatch.setattr(processing, "mp", NewMieApi())
+
+    assert processing.mie_efficiencies(1.0 + 0.1j, 2.0) == (1.0, 2.0, 3.0, 4.0)
+
+
+def test_processing_velocity_vectors_are_module_globals():
+    assert len(processing.speed) == 64
+    assert len(processing.speed2) == 64
+    assert processing.speed[0] == 0.0

@@ -72,3 +72,17 @@ raprom process "D:\Mrrdata" -i 60 --log-file raprom.log
 
 Mehr Details gibt es mit `-v`, Debug-Ausgaben mit `-vv`. Mit `--quiet` werden
 nur Warnungen und Fehler angezeigt.
+
+## GUI-Prototyp
+
+Eine einfache Desktop-Oberflaeche kann nach der Installation gestartet werden:
+
+```powershell
+raprom-gui
+```
+
+Die GUI verarbeitet entweder eine einzelne `.raw`-Datei oder alle `.raw`-Dateien
+in einem Ordner. Integration Time, Antennenhoehe, Kalibrierfaktor, Korrektur und
+Ausgabeordner koennen im Fenster gesetzt werden; Statusmeldungen erscheinen im
+Logbereich. Waehrend der Verarbeitung zeigt die GUI die Laufzeit, die aktuell
+verarbeitete Datei und regelmaessige "Noch aktiv ..."-Meldungen an.
