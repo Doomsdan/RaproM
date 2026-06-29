@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import bz2
 from pathlib import Path
+import zipfile
 
 import numpy as np
 from netCDF4 import Dataset
@@ -137,3 +139,132 @@ def test_process_raw_file_uses_output_dir(monkeypatch, tmp_path):
 
     assert output == output_dir / "sample-processed.nc"
     assert output.exists()
+
+
+def test_process_directory_extracts_archives_once_and_processes_new_raw(monkeypatch, tmp_path):
+    archive_path = tmp_path / "raw-data.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("archived.raw", "MRR placeholder\n")
+
+    calls = []
+
+    def fake_process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir):
+        calls.append(Path(raw_file).name)
+        output = Path(raw_file).with_name(f"{Path(raw_file).stem}-processed.nc")
+        output.write_text("processed", encoding="utf-8")
+        return str(output)
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fake_process_raw_file)
+
+    outputs = netcdf.process_directory(tmp_path, integration_time=60, correct=False)
+
+    assert calls == ["archived.raw"]
+    assert outputs == [str(tmp_path / "archived-processed.nc")]
+    assert (tmp_path / "archived.raw").read_text(encoding="utf-8") == "MRR placeholder\n"
+
+    (tmp_path / "archived.raw").write_text("keep existing file\n", encoding="utf-8")
+    calls.clear()
+
+    outputs = netcdf.process_directory(tmp_path, integration_time=60, correct=False)
+
+    assert calls == []
+    assert outputs == []
+    assert (tmp_path / "archived.raw").read_text(encoding="utf-8") == "keep existing file\n"
+
+
+def test_process_directory_skips_corrected_output_candidate(monkeypatch, tmp_path):
+    raw_path = tmp_path / "sample.raw"
+    raw_path.write_text("MRR placeholder\n", encoding="utf-8")
+    corrected_output = tmp_path / "CorrectedRaw" / "sample-corrected-processed.nc"
+    corrected_output.parent.mkdir()
+    corrected_output.write_text("processed", encoding="utf-8")
+
+    def fail_process_raw_file(*_args, **_kwargs):
+        raise AssertionError("processed an already completed raw file")
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fail_process_raw_file)
+
+    assert netcdf.process_directory(tmp_path, integration_time=60, correct=True) == []
+
+
+def test_process_directory_recurses_into_subfolders(monkeypatch, tmp_path):
+    nested = tmp_path / "station-a" / "202501"
+    nested.mkdir(parents=True)
+    raw_path = nested / "nested.raw"
+    raw_path.write_text("MRR placeholder\n", encoding="utf-8")
+
+    archive_dir = tmp_path / "station-b"
+    archive_dir.mkdir()
+    with zipfile.ZipFile(archive_dir / "raw-data.zip", "w") as archive:
+        archive.writestr("archived.raw", "MRR archived\n")
+
+    calls = []
+
+    def fake_process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir):
+        raw_file = Path(raw_file)
+        calls.append(raw_file.relative_to(tmp_path).as_posix())
+        output = raw_file.with_name(f"{raw_file.stem}-processed.nc")
+        output.write_text("processed", encoding="utf-8")
+        return str(output)
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fake_process_raw_file)
+
+    outputs = netcdf.process_directory(tmp_path, integration_time=60, correct=False)
+
+    assert calls == ["station-a/202501/nested.raw", "station-b/archived.raw"]
+    assert outputs == [
+        str(nested / "nested-processed.nc"),
+        str(archive_dir / "archived-processed.nc"),
+    ]
+    assert (archive_dir / "archived.raw").exists()
+
+
+def test_process_directory_extracts_bz2_raw_files(monkeypatch, tmp_path):
+    nested = tmp_path / "station-a"
+    nested.mkdir()
+    with bz2.open(nested / "sample.raw.bz2", "wb") as archive:
+        archive.write(b"MRR bz2 placeholder\n")
+
+    calls = []
+
+    def fake_process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir):
+        raw_file = Path(raw_file)
+        calls.append(raw_file.relative_to(tmp_path).as_posix())
+        output = raw_file.with_name(f"{raw_file.stem}-processed.nc")
+        output.write_text("processed", encoding="utf-8")
+        return str(output)
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fake_process_raw_file)
+
+    outputs = netcdf.process_directory(tmp_path, integration_time=60, correct=False)
+
+    assert calls == ["station-a/sample.raw"]
+    assert outputs == [str(nested / "sample-processed.nc")]
+    assert (nested / "sample.raw").read_text(encoding="utf-8") == "MRR bz2 placeholder\n"
+
+
+def test_process_directory_does_not_extract_bz2_when_output_exists(monkeypatch, tmp_path):
+    with bz2.open(tmp_path / "sample.raw.bz2", "wb") as archive:
+        archive.write(b"MRR bz2 placeholder\n")
+    (tmp_path / "sample-processed.nc").write_text("processed", encoding="utf-8")
+
+    def fail_process_raw_file(*_args, **_kwargs):
+        raise AssertionError("processed an already completed compressed raw file")
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fail_process_raw_file)
+
+    assert netcdf.process_directory(tmp_path, integration_time=60, correct=False) == []
+    assert not (tmp_path / "sample.raw").exists()
+
+
+def test_process_directory_ignores_generated_corrected_raw_folder(monkeypatch, tmp_path):
+    corrected = tmp_path / "CorrectedRaw"
+    corrected.mkdir()
+    (corrected / "sample-corrected.raw").write_text("generated", encoding="utf-8")
+
+    def fail_process_raw_file(*_args, **_kwargs):
+        raise AssertionError("processed generated corrected raw file")
+
+    monkeypatch.setattr(netcdf, "process_raw_file", fail_process_raw_file)
+
+    assert netcdf.process_directory(tmp_path, integration_time=60) == []
