@@ -31,11 +31,12 @@ def test_corrector_removes_repeated_mrr_header(tmp_path):
     corrected_path = Path(CorrectorFile(str(raw_path)))
 
     assert corrected_path.name == "repeated-corrected.raw"
+    assert corrected_path.parent == tmp_path / "CorrectedRaw"
     corrected_lines = corrected_path.read_text(encoding="utf-8").splitlines()
     assert corrected_lines.count(raw_block("250101000010")[0]) == 0
     assert corrected_lines.count(raw_block("250101000020")[0]) == 1
-    assert (tmp_path / "Moved" / raw_path.name).exists()
-    assert not raw_path.exists()
+    assert raw_path.exists()
+    assert not (tmp_path / "Moved").exists()
 
 
 def test_corrector_drops_malformed_record(tmp_path):
@@ -53,10 +54,12 @@ def test_corrector_drops_malformed_record(tmp_path):
 
     text = corrected_path.read_text(encoding="utf-8")
     assert corrected_path.name == "malformed-corrected.raw"
+    assert corrected_path.parent == tmp_path / "CorrectedRaw"
     assert "BROKEN LINE" not in text
     assert "MRR 250101000000" in text
     assert "MRR 250101000010" in text
-    assert (tmp_path / "Moved" / raw_path.name).exists()
+    assert raw_path.exists()
+    assert not (tmp_path / "Moved").exists()
 
 
 def test_corrector_drops_backward_time_jump(tmp_path):
@@ -74,6 +77,8 @@ def test_corrector_drops_backward_time_jump(tmp_path):
 
     text = corrected_path.read_text(encoding="utf-8")
     assert corrected_path.name == "jump-corrected.raw"
+    assert corrected_path.parent == tmp_path / "CorrectedRaw"
     assert "MRR 250101000030" in text
     assert "MRR 250101000020" not in text
-    assert (tmp_path / "Moved" / raw_path.name).exists()
+    assert raw_path.exists()
+    assert not (tmp_path / "Moved").exists()

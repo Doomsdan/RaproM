@@ -10,9 +10,7 @@
 import numpy as np
 import calendar
 import datetime
-import glob
-import os
-import shutil
+from pathlib import Path
 
 ##import matplotlib.dates as mdates
 
@@ -21,22 +19,22 @@ def date2unix(date):
 def unix2date(unix):
     return datetime.datetime.utcfromtimestamp(unix)
 
-def CorrectorFile(fid):
+def CorrectorFile(fid, output_dir=None):
     NameFile=fid
+    source_path = Path(NameFile).resolve()
+    if output_dir is None:
+        output_path = source_path.parent / "CorrectedRaw"
+    else:
+        output_path = Path(output_dir).resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    OutNameFile=NameFile[:-4]+'-corrected'
+    OutNameFile=str(output_path / f"{source_path.stem}-corrected")
 
-    FileCorre=NameFile[:-4]+'-correctedRepetition.raw' #create a new file
+    FileCorre=str(output_path / f"{source_path.stem}-correctedRepetition.raw") #create a new file
 
-    FileCorre2=NameFile[:-4]+'-correctedErrors.raw' #create a new file
+    FileCorre2=str(output_path / f"{source_path.stem}-correctedErrors.raw") #create a new file
 
-    FileCorre3=NameFile[:-4]+'-correctedJumps.raw' #create a new file
-
-    
-
-    folderName=os.path.join(os.path.dirname(os.path.abspath(NameFile)), 'Moved')
-    if not os.path.exists(folderName):
-        os.mkdir(folderName)
+    FileCorre3=str(output_path / f"{source_path.stem}-correctedJumps.raw") #create a new file
     
 ##    f1=open(FileCorre,'w+')
 
@@ -160,29 +158,6 @@ def CorrectorFile(fid):
     
     f1.close()
     f.close()
-
-##    if lineCount==0:
-##        os.remove(FileCorre)
-##        OutName=NameFile
-##        f1=open(FileCorre,'w+')
-##        f=open(NameFile,'r', errors='ignore')
-##        
-##        
-##    else:
-##        shutil.copy(NameFile, folderName)
-##        os.remove(NameFile)
-##        OutName=FileCorre
-##
-##        f1=open(FileCorre2,'w+')
-##        f=open(FileCorre,'r')
-
-
-            
-
-
-
-
-
 ########CHECKING FOR JUMPS TIME FOR THE SYNCHRONIZATION
 
     f=open(FileCorre2,'r')
@@ -239,85 +214,39 @@ def CorrectorFile(fid):
           
     f1.close()
     f.close()
-######    NOW DELETE THE FILES CORRECTED IF THERE AREN'T CORRECTIONS. m is for jumps correction, lineCount for error corrections and CountM for repetitions header
+######    SELECT THE CORRECTED OUTPUT IF CORRECTIONS WERE NEEDED. m is for jumps correction, lineCount for error corrections and CountM for repetitions header
+    intermediate_files = [Path(FileCorre), Path(FileCorre2), Path(FileCorre3)]
+    final_corrected_path = Path(OutNameFile+'.raw')
+    corrected_source = None
     if m==0 and lineCount==0 and CountM==0:#file correct
-        os.remove(FileCorre)
-        os.remove(FileCorre2)
-        os.remove(FileCorre3)
-
         OutName=NameFile
     if m==0 and lineCount!=0 and CountM==0:#file with errors in lines
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre)
-        os.remove(FileCorre3)
-        OutName=FileCorre2
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre2,OutName)
+        corrected_source = Path(FileCorre2)
     if m==0 and lineCount==0 and CountM!=0:#file with header repetition
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre2)
-        os.remove(FileCorre3)
-        OutName=FileCorre
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre,OutName)
+        corrected_source = Path(FileCorre)
     if m!=0 and lineCount==0 and CountM==0:# file with time jumps backward
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre)
-        os.remove(FileCorre2)
-        OutName=FileCorre3
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre3,OutName)
+        corrected_source = Path(FileCorre3)
 
     if m!=0 and lineCount!=0 and CountM==0:#file with time jumps backward and errors in lines
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre)
-        os.remove(FileCorre2)
-        OutName=FileCorre3
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre3,OutName)
+        corrected_source = Path(FileCorre3)
 
     if m==0 and lineCount!=0 and CountM!=0:#file with header repetition and errors in lines
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre)
-        os.remove(FileCorre3)
-        OutName=FileCorre2
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre2,OutName)
+        corrected_source = Path(FileCorre2)
 
     if m!=0 and lineCount==0 and CountM!=0:#file with time jumps backward and header repetition
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-
-        os.remove(FileCorre)
-        os.remove(FileCorre2)
-        OutName=FileCorre3
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre3,OutName)
+        corrected_source = Path(FileCorre3)
 
     if m!=0 and lineCount!=0 and CountM!=0:#file with all problems
+        corrected_source = Path(FileCorre3)
 
-        shutil.copy(NameFile, folderName)
-        os.remove(NameFile)
-##        os.remove(NameFile)
-        os.remove(FileCorre)
-        os.remove(FileCorre2)
-        
-        OutName=FileCorre3
-        
-##        print('From file ',FileCorre2[:-6]+'.raw',' ',m, 'rows were deleted for time jumps\n',)
-##        print('A new file with the same name but finished as -corrected is created ')
-        OutName=OutNameFile+'.raw'
-        os.rename(FileCorre3,OutName)
+    if corrected_source is not None:
+        corrected_source.replace(final_corrected_path)
+        OutName = str(final_corrected_path)
+
+    for temp_file in intermediate_files:
+        if temp_file != final_corrected_path:
+            temp_file.unlink(missing_ok=True)
+
     print('In ',NameFile,' the ratio of correction is ',round(100.*(m+lineCount+CountM)/TotalLinesFile,2),'% where ',m+lineCount+CountM,' rows were deleted from ',TotalLinesFile,' rows')
     print('Number of lines deleted by Header repetition ',CountM)
     print('Number of lines deleted by Errors lines ',lineCount)

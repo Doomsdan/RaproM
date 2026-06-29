@@ -37,7 +37,7 @@ def main(argv=None):
         raw_files = list_raw_files(args.path)
         print('In this folder there are '+str(len(raw_files))+' raw files')
         if raw_files:
-            print('A new file with the same name but finished as -corrected is created \n')
+            print('Corrected files are written to the CorrectedRaw output folder; original raw files are left unchanged.\n')
         for raw_file in raw_files:
             CorrectorFile(str(raw_file))
         return 0
