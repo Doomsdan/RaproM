@@ -10,9 +10,12 @@
 import numpy as np
 import calendar
 import datetime
+import logging
 from pathlib import Path
 
 ##import matplotlib.dates as mdates
+
+logger = logging.getLogger(__name__)
 
 def date2unix(date):
     return calendar.timegm(date.timetuple())
@@ -41,6 +44,7 @@ def CorrectorFile(fid, output_dir=None):
     f=open(NameFile,'r', errors='ignore')
     file_length = len(f.read().split('\n'))
     totallines=(file_length-7)/67
+    logger.debug("Starting raw file correction for %s; estimated records: %s", source_path, totallines)
     
     m=0
     timeList=list()
@@ -242,14 +246,23 @@ def CorrectorFile(fid, output_dir=None):
     if corrected_source is not None:
         corrected_source.replace(final_corrected_path)
         OutName = str(final_corrected_path)
+        logger.info("Wrote corrected raw file: %s", final_corrected_path)
+    else:
+        logger.info("No corrections needed for %s", source_path)
 
     for temp_file in intermediate_files:
         if temp_file != final_corrected_path:
             temp_file.unlink(missing_ok=True)
 
-    print('In ',NameFile,' the ratio of correction is ',round(100.*(m+lineCount+CountM)/TotalLinesFile,2),'% where ',m+lineCount+CountM,' rows were deleted from ',TotalLinesFile,' rows')
-    print('Number of lines deleted by Header repetition ',CountM)
-    print('Number of lines deleted by Errors lines ',lineCount)
-    print('Number of lines deleted by jumps time ',m)
+    logger.info(
+        "Correction ratio for %s: %.2f%% (%s rows deleted from %s)",
+        NameFile,
+        round(100.*(m+lineCount+CountM)/TotalLinesFile,2),
+        m+lineCount+CountM,
+        TotalLinesFile,
+    )
+    logger.debug("Rows deleted by header repetition: %s", CountM)
+    logger.debug("Rows deleted by malformed lines: %s", lineCount)
+    logger.debug("Rows deleted by backward time jumps: %s", m)
 ##    print('total lines',TotalLinesFile,' and deleted ',m+lineCount)
     return OutName

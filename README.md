@@ -33,3 +33,15 @@ Optionen aus dem alten Skript sind als CLI-Flags verfuegbar:
 ```powershell
 raprom process "D:\Mrrdata" -i 60 --antenna-height 120 -M 1.05
 ```
+
+## Logging
+
+Die CLI schreibt Statusmeldungen ueber Python-Logging auf die Konsole. Mit
+`--log-file` werden dieselben Meldungen zusaetzlich in eine Datei geschrieben:
+
+```powershell
+raprom process "D:\Mrrdata" -i 60 --log-file raprom.log
+```
+
+Mehr Details gibt es mit `-v`, Debug-Ausgaben mit `-vv`. Mit `--quiet` werden
+nur Warnungen und Fehler angezeigt.
