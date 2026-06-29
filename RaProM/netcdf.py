@@ -2,7 +2,6 @@
 
 from pathlib import Path
 import datetime
-import glob
 import logging
 import time
 
@@ -11,6 +10,7 @@ from netCDF4 import Dataset, date2num
 
 from . import processing
 from .correction import CorrectorFile
+from .io import extract_archives, list_raw_files
 from .processing import *
 
 logger = logging.getLogger(__name__)
@@ -592,11 +592,48 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     return output_path
 
 
-def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
-    """Process every ``.raw`` file in *root* and return generated NetCDF paths."""
+def _processed_output_candidates(raw_file, output_dir=None, correct=True):
+    raw_path = Path(raw_file)
+    if output_dir is None:
+        output_path = raw_path.parent
+        candidates = [output_path / f"{raw_path.stem}-processed.nc"]
+        if correct:
+            candidates.append(raw_path.parent / "CorrectedRaw" / f"{raw_path.stem}-corrected-processed.nc")
+        return candidates
+
+    output_path = Path(output_dir)
+    candidates = [output_path / f"{raw_path.stem}-processed.nc"]
+    if correct:
+        candidates.append(output_path / f"{raw_path.stem}-corrected-processed.nc")
+    return candidates
+
+
+def _already_processed(raw_file, output_dir=None, correct=True):
+    return any(path.exists() for path in _processed_output_candidates(raw_file, output_dir, correct))
+
+
+def prepare_directory(root, output_dir=None, correct=True):
+    """Extract archives below *root* and return unprocessed raw files."""
     root_path = Path(root)
-    raw_files = sorted(glob.glob(str(root_path / '*.raw')))
-    logger.info("Found %s raw file(s) in %s", len(raw_files), root_path)
+    extract_archives(
+        root_path,
+        should_extract=lambda destination: destination.suffix.lower() != ".raw" or not _already_processed(destination, output_dir, correct),
+    )
+    raw_files = list_raw_files(root_path)
+    unprocessed = []
+    for raw_file in raw_files:
+        if _already_processed(raw_file, output_dir, correct):
+            logger.info("Skipping already processed raw file: %s", raw_file)
+            continue
+        unprocessed.append(raw_file)
+    return unprocessed, raw_files
+
+
+def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
+    """Extract archives and process every unprocessed ``.raw`` file in *root*."""
+    root_path = Path(root)
+    raw_files, all_raw_files = prepare_directory(root_path, output_dir, correct)
+    logger.info("Found %s raw file(s) in %s", len(all_raw_files), root_path)
     logger.info("Generated NetCDF files use the source raw filename with a '-processed.nc' suffix.")
     outputs = []
     for raw_file in raw_files:

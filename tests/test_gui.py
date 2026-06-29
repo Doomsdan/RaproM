@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bz2
 import math
 
 import pytest
@@ -59,12 +60,16 @@ def test_process_selected_path_uses_single_file_processor(monkeypatch, tmp_path)
 def test_find_raw_files_returns_sorted_raw_files(tmp_path):
     second = tmp_path / "b.raw"
     first = tmp_path / "a.raw"
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    nested_raw = nested / "c.raw"
     ignored = tmp_path / "notes.txt"
     second.write_text("", encoding="utf-8")
     first.write_text("", encoding="utf-8")
+    nested_raw.write_text("", encoding="utf-8")
     ignored.write_text("", encoding="utf-8")
 
-    assert find_raw_files(tmp_path) == [first, second]
+    assert find_raw_files(tmp_path) == [first, second, nested_raw]
 
 
 def test_process_selected_path_reports_file_progress(monkeypatch, tmp_path):
@@ -77,7 +82,10 @@ def test_process_selected_path_reports_file_progress(monkeypatch, tmp_path):
     def fake_process_raw_file(raw_path, _integration_time, **_kwargs):
         return f"{raw_path.stem}-processed.nc"
 
-    monkeypatch.setattr("raprom.gui._get_processors", lambda: (None, fake_process_raw_file))
+    def fake_prepare_directory(_input_path, output_dir=None, correct=True):
+        return raw_files, raw_files
+
+    monkeypatch.setattr("raprom.gui._get_processors", lambda: (fake_prepare_directory, fake_process_raw_file))
 
     outputs = process_selected_path(settings, progress_callback=progress_events.append)
 
@@ -86,6 +94,31 @@ def test_process_selected_path_reports_file_progress(monkeypatch, tmp_path):
         (1, 2, "a.raw"),
         (2, 2, "b.raw"),
     ]
+
+
+def test_process_selected_path_prepares_folder_before_processing(monkeypatch, tmp_path):
+    processed_raw = tmp_path / "0101.raw"
+    processed_raw.write_text("", encoding="utf-8")
+    (tmp_path / "0101-processed.nc").write_text("", encoding="utf-8")
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    with bz2.open(nested / "0102.raw.bz2", "wb") as archive:
+        archive.write(b"MRR placeholder\n")
+
+    settings = build_process_settings(str(tmp_path), "60", "", "1.0", "", False)
+    processed = []
+
+    def fake_process_raw_file(raw_path, _integration_time, **_kwargs):
+        processed.append(raw_path.relative_to(tmp_path).as_posix())
+        return f"{raw_path.stem}-processed.nc"
+
+    monkeypatch.setattr("raprom.gui._get_processors", lambda: (__import__("raprom.netcdf").netcdf.prepare_directory, fake_process_raw_file))
+
+    outputs = process_selected_path(settings)
+
+    assert processed == ["nested/0102.raw"]
+    assert outputs == ["0102-processed.nc"]
+    assert (nested / "0102.raw").exists()
 
 
 def test_format_duration_uses_minutes_or_hours():

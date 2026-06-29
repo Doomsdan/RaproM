@@ -90,16 +90,22 @@ def find_raw_files(input_path: Path) -> list[Path]:
     """Return selected raw file(s) in deterministic processing order."""
     if input_path.is_file():
         return [input_path]
-    return sorted(input_path.glob("*.raw"))
+    from .io import list_raw_files
+
+    return list_raw_files(input_path)
 
 
 def process_selected_path(settings: GuiProcessSettings, progress_callback=None) -> list[str]:
     """Process a selected raw file or all raw files in a selected folder."""
-    _process_directory, process_raw_file = _get_processors()
+    prepare_directory, process_raw_file = _get_processors()
     logger = logging.getLogger(LOGGER_NAME)
     output_dir = str(settings.output_dir) if settings.output_dir else None
-    raw_files = find_raw_files(settings.input_path)
-    logger.info("Found %s raw file(s) in %s", len(raw_files), settings.input_path)
+    if settings.input_path.is_file():
+        raw_files = [settings.input_path]
+        all_raw_files = raw_files
+    else:
+        raw_files, all_raw_files = prepare_directory(settings.input_path, output_dir=output_dir, correct=settings.correct)
+    logger.info("Found %s raw file(s) in %s", len(all_raw_files), settings.input_path)
 
     outputs = []
     for index, raw_file in enumerate(raw_files, start=1):
@@ -120,9 +126,9 @@ def process_selected_path(settings: GuiProcessSettings, progress_callback=None) 
 
 
 def _get_processors():
-    from .netcdf import process_directory, process_raw_file
+    from .netcdf import prepare_directory, process_raw_file
 
-    return process_directory, process_raw_file
+    return prepare_directory, process_raw_file
 
 
 class QueueLogHandler(logging.Handler):
