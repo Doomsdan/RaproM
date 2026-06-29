@@ -34,6 +34,33 @@ Optionen aus dem alten Skript sind als CLI-Flags verfuegbar:
 raprom process "D:\Mrrdata" -i 60 --antenna-height 120 -M 1.05
 ```
 
+Wiederkehrende Parameter koennen in einer TOML- oder YAML-Datei gespeichert
+werden. CLI-Flags ueberschreiben Werte aus der Datei:
+
+```toml
+[process]
+path = "D:/Mrrdata"
+integration_time = 60
+radar_height = 120.0
+output_dir = "D:/Mrrdata/Processed"
+correct = true
+
+[process.calibration]
+adjust_m = 1.05
+```
+
+Start mit Konfiguration:
+
+```powershell
+raprom process --config raprom.example.toml
+```
+
+Der gleiche Aufruf kann einzelne Werte gezielt ueberschreiben:
+
+```powershell
+raprom process --config raprom.example.toml --integration-time 30
+```
+
 ## Logging
 
 Die CLI schreibt Statusmeldungen ueber Python-Logging auf die Konsole. Mit

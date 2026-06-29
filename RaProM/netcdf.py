@@ -15,7 +15,7 @@ from .processing import *
 logger = logging.getLogger(__name__)
 
 
-def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True):
+def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
     """Process a single MRR ``.raw`` file into a NetCDF file.
 
     Parameters mirror the options from the original script. The returned path is
@@ -33,7 +33,13 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     if correct:
         NameFile=CorrectorFile(NameFile)
     logger.info("Processing raw file: %s", NameFile)
-    filenameplot=NameFile[:-4]+'-processed'
+    source_stem = Path(NameFile).stem
+    if output_dir is None:
+        filenameplot = str(Path(NameFile).with_suffix('')) + '-processed'
+    else:
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        filenameplot = str(output_path / f"{source_stem}-processed")
 
     f=open(NameFile,'r')
     a=f.readline()
@@ -573,7 +579,7 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     return output_path
 
 
-def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True):
+def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
     """Process every ``.raw`` file in *root* and return generated NetCDF paths."""
     root_path = Path(root)
     raw_files = sorted(glob.glob(str(root_path / '*.raw')))
@@ -581,5 +587,5 @@ def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.
     logger.info("Generated NetCDF files use the source raw filename with a '-processed.nc' suffix.")
     outputs = []
     for raw_file in raw_files:
-        outputs.append(process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct))
+        outputs.append(process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir))
     return outputs
