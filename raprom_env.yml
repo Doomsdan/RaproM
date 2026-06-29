@@ -9,4 +9,6 @@ dependencies:
   - miepython>=3.2
   - netcdf4>=1.7.2
   - cftime
+  - tomli
+  - pyyaml
   - ipykernel

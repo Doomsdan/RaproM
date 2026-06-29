@@ -1,0 +1,9 @@
+[process]
+path = "D:/Mrrdata"
+integration_time = 60
+radar_height = 120.0
+output_dir = "D:/Mrrdata/Processed"
+correct = true
+
+[process.calibration]
+adjust_m = 1.05
