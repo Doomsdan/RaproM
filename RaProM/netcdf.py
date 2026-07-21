@@ -9,6 +9,7 @@ import numpy as np
 from netCDF4 import Dataset, date2num
 
 from . import processing
+from .cancellation import raise_if_cancelled
 from .correction import CorrectorFile
 from .io import extract_archives, list_raw_files
 from .processing import *
@@ -23,7 +24,7 @@ def _format_progress_bytes(position, total):
     return f"{position / 1024 / 1024:.1f}/{total / 1024 / 1024:.1f} MB ({percent:.1f}%)"
 
 
-def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
+def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None, cancel_event=None):
     """Process a single MRR ``.raw`` file into a NetCDF file.
 
     Parameters mirror the options from the original script. The returned path is
@@ -38,9 +39,11 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
 
 
     count=0
+    raise_if_cancelled(cancel_event)
     if correct:
         logger.info("Correcting raw file before processing: %s", NameFile)
         NameFile=CorrectorFile(NameFile)
+        raise_if_cancelled(cancel_event)
         logger.info("Finished raw-file correction: %s", NameFile)
     logger.info("Processing raw file: %s", NameFile)
     source_size = Path(NameFile).stat().st_size
@@ -172,6 +175,7 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
     SigmaExt=[]
     ##    print(len(D),len(D[0]))
     for i in range(len(D)):#entry in height
+        raise_if_cancelled(cancel_event)
         sig1,sig2=ScatExt(D[i],lamb)
         SigmaScatt.append(sig1)
         SigmaExt.append(sig2)
@@ -222,6 +226,7 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
 
 
     while 1:
+        raise_if_cancelled(cancel_event)
         line=f.readline()
 
         line=line.strip()
@@ -240,7 +245,9 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
                 proeta=Promig(PotCorrSum)
                 
 
+                raise_if_cancelled(cancel_event)
                 estat,NewMatrix,z_da,Lwc,Rr,SnowRate,w,sig,sk,Noi,DSD,NdE,Ze,Mov,velTur,snr,kur,PiA_par,NW,DM,PiA=Process(proeta,Harray[1:],timeVec,D)
+                raise_if_cancelled(cancel_event)
                 bb_bot,bb_top=BB(w,Ze,Harray[1:])
                 estat,NW,DM,Lwc,Rr=CheckType(estat,bb_bot,bb_top,DeltaH,NW,DM,Lwc,Rr,sk,Ze,kur,snr,sig,w)
                 z_da,Lwc,Rr,NW,DM,DSD,NdE,PiA_da=Rain_Par(estat,z_da,Lwc,Rr,NW,DM,NewMatrix,D,DSD,NdE,Harray[1:],w,PiA)
@@ -345,6 +352,7 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
         
         Number_bins=64#is the number of heights from file
         for j in range(Number_bins):
+            raise_if_cancelled(cancel_event)
             Data=f.readline()
             Data=Data.strip()
             Data=Data.split()
@@ -492,7 +500,9 @@ def process_raw_file(raw_file, integration_time, antenna_height=np.nan, adjust_m
 
 
             PotCorrSum=[]#empty the array    
+            raise_if_cancelled(cancel_event)
             estat,NewMatrix,z_da,Lwc,Rr,SnowRate,w,sig,sk,Noi,DSD,NdE,Ze,Mov,velTur,snr,kur,PiA_par,NW,DM,PiA=Process(proeta,Harray[1:],timeVec,D)
+            raise_if_cancelled(cancel_event)
             bb_bot,bb_top=BB(w,Ze,Harray[1:])
             estat,NW,DM,Lwc,Rr=CheckType(estat,bb_bot,bb_top,DeltaH,NW,DM,Lwc,Rr,sk,Ze,kur,snr,sig,w)
             z_da,Lwc,Rr,NW,DM,DSD,NdE,PiA_da=Rain_Par(estat,z_da,Lwc,Rr,NW,DM,NewMatrix,D,DSD,NdE,Harray[1:],w,PiA)
@@ -629,7 +639,7 @@ def prepare_directory(root, output_dir=None, correct=True):
     return unprocessed, raw_files
 
 
-def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None):
+def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.0, correct=True, output_dir=None, cancel_event=None):
     """Extract archives and process every unprocessed ``.raw`` file in *root*."""
     root_path = Path(root)
     raw_files, all_raw_files = prepare_directory(root_path, output_dir, correct)
@@ -637,5 +647,19 @@ def process_directory(root, integration_time, antenna_height=np.nan, adjust_m=1.
     logger.info("Generated NetCDF files use the source raw filename with a '-processed.nc' suffix.")
     outputs = []
     for raw_file in raw_files:
-        outputs.append(process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir))
+        raise_if_cancelled(cancel_event)
+        if cancel_event is None:
+            outputs.append(process_raw_file(raw_file, integration_time, antenna_height, adjust_m, correct, output_dir))
+        else:
+            outputs.append(
+                process_raw_file(
+                    raw_file,
+                    integration_time,
+                    antenna_height,
+                    adjust_m,
+                    correct,
+                    output_dir,
+                    cancel_event=cancel_event,
+                )
+            )
     return outputs

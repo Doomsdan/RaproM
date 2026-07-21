@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from .cancellation import ProcessingCancelled, raise_if_cancelled
 from .config import load_process_config, load_station_config
 
 
@@ -157,11 +158,12 @@ def find_raw_files(input_path: Path) -> list[Path]:
     return list_raw_files(input_path)
 
 
-def process_selected_path(settings: GuiProcessSettings, progress_callback=None) -> list[str]:
+def process_selected_path(settings: GuiProcessSettings, progress_callback=None, cancel_event=None) -> list[str]:
     """Process a selected raw file or all raw files in a selected folder."""
     prepare_directory, process_raw_file = _get_processors()
     logger = logging.getLogger(LOGGER_NAME)
     output_dir = str(settings.output_dir) if settings.output_dir else None
+    raise_if_cancelled(cancel_event)
     if settings.input_path.is_file():
         raw_files = [settings.input_path]
         all_raw_files = raw_files
@@ -171,6 +173,7 @@ def process_selected_path(settings: GuiProcessSettings, progress_callback=None) 
 
     outputs = []
     for index, raw_file in enumerate(raw_files, start=1):
+        raise_if_cancelled(cancel_event)
         if progress_callback is not None:
             progress_callback(FileProgress(index, len(raw_files), raw_file))
         logger.info("Starting file %s of %s: %s", index, len(raw_files), raw_file)
@@ -182,8 +185,10 @@ def process_selected_path(settings: GuiProcessSettings, progress_callback=None) 
                 adjust_m=settings.adjust_m,
                 correct=settings.correct,
                 output_dir=output_dir,
+                cancel_event=cancel_event,
             )
         )
+        raise_if_cancelled(cancel_event)
     return outputs
 
 
@@ -214,6 +219,7 @@ class RapromGui(tk.Tk):
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.worker: threading.Thread | None = None
+        self.cancel_event = threading.Event()
         self.log_handler: QueueLogHandler | None = None
         self.processing_started_at: float | None = None
         self.last_heartbeat_at: float | None = None
@@ -286,11 +292,14 @@ class RapromGui(tk.Tk):
 
         controls = ttk.Frame(parent)
         controls.grid(row=2, column=0, sticky="ew", pady=(14, 10))
-        controls.columnconfigure(1, weight=1)
+        controls.columnconfigure(2, weight=1)
         self.run_button = ttk.Button(controls, text="Verarbeitung starten", style="Primary.TButton", command=self._start_processing)
         self.run_button.grid(row=0, column=0, sticky="w")
+        self.stop_button = ttk.Button(controls, text="Stop", command=self._stop_processing)
+        self.stop_button.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        self.stop_button.state(["disabled"])
         self.progress = ttk.Progressbar(controls, mode="indeterminate")
-        self.progress.grid(row=0, column=1, sticky="ew", padx=(12, 0))
+        self.progress.grid(row=0, column=2, sticky="ew", padx=(12, 0))
         ttk.Label(parent, textvariable=self.progress_detail, foreground="#575757").grid(
             row=3, column=0, sticky="w", pady=(0, 10)
         )
@@ -389,21 +398,39 @@ class RapromGui(tk.Tk):
         self._configure_processing_logging()
         self.status.set("Laeuft")
         self.progress_detail.set("Startet ...")
+        self.cancel_event = threading.Event()
         self.processing_started_at = time.monotonic()
         self.last_heartbeat_at = self.processing_started_at
         self.run_button.state(["disabled"])
+        self.stop_button.state(["!disabled"])
         self.progress.start(10)
         self.worker = threading.Thread(target=self._run_worker, args=(settings,), daemon=True)
         self.worker.start()
 
     def _run_worker(self, settings: GuiProcessSettings) -> None:
         try:
-            outputs = process_selected_path(settings, progress_callback=self._queue_file_progress)
+            outputs = process_selected_path(
+                settings,
+                progress_callback=self._queue_file_progress,
+                cancel_event=self.cancel_event,
+            )
+        except ProcessingCancelled as exc:
+            logging.getLogger(LOGGER_NAME).info(str(exc))
+            self.events.put(("cancelled", str(exc)))
         except Exception as exc:  # pragma: no cover - exercised manually through the GUI
             logging.getLogger(LOGGER_NAME).exception("Verarbeitung fehlgeschlagen")
             self.events.put(("error", str(exc)))
         else:
             self.events.put(("done", outputs))
+
+    def _stop_processing(self) -> None:
+        if self.worker is None or not self.worker.is_alive():
+            return
+        self.cancel_event.set()
+        self.status.set("Stoppt")
+        self.progress_detail.set("Abbruch angefordert ...")
+        self.stop_button.state(["disabled"])
+        self._append_log("Abbruch angefordert. Der aktuelle Verarbeitungsschritt wird beendet.")
 
     def _queue_file_progress(self, progress: FileProgress) -> None:
         self.events.put(("file_progress", progress))
@@ -433,6 +460,9 @@ class RapromGui(tk.Tk):
                     self._append_log(f"Fertig. Erzeugte NetCDF-Dateien: {len(outputs)}")
                     if outputs:
                         self._append_log("\n".join(str(output) for output in outputs))
+                elif event == "cancelled":
+                    self._finish_processing("Abgebrochen")
+                    self._append_log(str(payload))
                 elif event == "error":
                     self._finish_processing("Fehler")
                     messagebox.showerror("Verarbeitung fehlgeschlagen", str(payload))
@@ -443,6 +473,7 @@ class RapromGui(tk.Tk):
     def _finish_processing(self, status: str) -> None:
         self.progress.stop()
         self.run_button.state(["!disabled"])
+        self.stop_button.state(["disabled"])
         self.status.set(status)
         if self.processing_started_at is not None:
             elapsed = time.monotonic() - self.processing_started_at
@@ -482,6 +513,7 @@ class RapromGui(tk.Tk):
         if self.worker is not None and self.worker.is_alive():
             if not messagebox.askyesno("Verarbeitung laeuft", "Die Verarbeitung laeuft noch. Trotzdem schliessen?"):
                 return
+            self.cancel_event.set()
         self.destroy()
 
 
