@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import bz2
 import math
+import threading
 
 import pytest
 
+from raprom.cancellation import ProcessingCancelled
 from raprom.gui import (
     build_process_settings,
     find_raw_files,
@@ -159,6 +161,46 @@ def test_process_selected_path_reports_file_progress(monkeypatch, tmp_path):
         (1, 2, "a.raw"),
         (2, 2, "b.raw"),
     ]
+
+
+def test_process_selected_path_stops_before_next_file(monkeypatch, tmp_path):
+    raw_files = [tmp_path / "a.raw", tmp_path / "b.raw"]
+    for raw_file in raw_files:
+        raw_file.write_text("", encoding="utf-8")
+    settings = build_process_settings(str(tmp_path), "30", "", "1.0", "", True)
+    cancel_event = threading.Event()
+    processed = []
+
+    def fake_process_raw_file(raw_path, _integration_time, **_kwargs):
+        processed.append(raw_path.name)
+        cancel_event.set()
+        return f"{raw_path.stem}-processed.nc"
+
+    def fake_prepare_directory(_input_path, output_dir=None, correct=True):
+        return raw_files, raw_files
+
+    monkeypatch.setattr("raprom.gui._get_processors", lambda: (fake_prepare_directory, fake_process_raw_file))
+
+    with pytest.raises(ProcessingCancelled):
+        process_selected_path(settings, cancel_event=cancel_event)
+
+    assert processed == ["a.raw"]
+
+
+def test_process_selected_path_stops_before_processing(monkeypatch, tmp_path):
+    raw_file = tmp_path / "sample.raw"
+    raw_file.write_text("", encoding="utf-8")
+    settings = build_process_settings(str(raw_file), "30", "", "1.0", "", True)
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    def fake_process_raw_file(*_args, **_kwargs):
+        raise AssertionError("processing should not start after cancellation")
+
+    monkeypatch.setattr("raprom.gui._get_processors", lambda: (None, fake_process_raw_file))
+
+    with pytest.raises(ProcessingCancelled):
+        process_selected_path(settings, cancel_event=cancel_event)
 
 
 def test_process_selected_path_prepares_folder_before_processing(monkeypatch, tmp_path):
