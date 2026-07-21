@@ -5,7 +5,14 @@ import math
 
 import pytest
 
-from raprom.gui import build_process_settings, find_raw_files, format_duration, parse_optional_float, process_selected_path
+from raprom.gui import (
+    build_process_settings,
+    find_raw_files,
+    format_duration,
+    load_gui_config_values,
+    parse_optional_float,
+    process_selected_path,
+)
 
 
 def test_parse_optional_float_accepts_empty_and_decimal_comma():
@@ -34,6 +41,64 @@ def test_build_process_settings_rejects_non_raw_file(tmp_path):
 
     with pytest.raises(ValueError, match="Endung .raw"):
         build_process_settings(str(text_file), "60", "", "1.0", "", True)
+
+
+def test_load_gui_config_values_from_station_yaml(tmp_path):
+    config_path = tmp_path / "station.yaml"
+    config_path.write_text(
+        """
+station:
+  id: station-a
+  paths:
+    raw_data: D:/Mrrdata/station-a
+    output: D:/Mrrdata/station-a/Processed
+  instrument:
+    antenna_height_m: 120.0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    values = load_gui_config_values(config_path)
+
+    assert values.input_path == "D:/Mrrdata/station-a"
+    assert values.output_dir == "D:/Mrrdata/station-a/Processed"
+    assert values.antenna_height == "120.0"
+    assert values.integration_time == ""
+    assert values.correct is None
+
+
+def test_load_gui_config_values_prefers_process_block(tmp_path):
+    config_path = tmp_path / "station.yaml"
+    config_path.write_text(
+        """
+station:
+  id: station-a
+  paths:
+    raw_data: D:/Mrrdata/station-a
+    output: D:/Mrrdata/station-a/Processed
+  instrument:
+    antenna_height_m: 120.0
+
+process:
+  path: D:/Mrrdata/station-a/202501
+  integration_time: 30
+  antenna_height: 142.5
+  output_dir: D:/Mrrdata/station-a/Processed/202501
+  correct: false
+  calibration:
+    adjust_m: 1.05
+""".strip(),
+        encoding="utf-8",
+    )
+
+    values = load_gui_config_values(config_path)
+
+    assert values.input_path == "D:/Mrrdata/station-a/202501"
+    assert values.integration_time == "30"
+    assert values.antenna_height == "142.5"
+    assert values.adjust_m == "1.05"
+    assert values.output_dir == "D:/Mrrdata/station-a/Processed/202501"
+    assert values.correct is False
 
 
 def test_process_selected_path_uses_single_file_processor(monkeypatch, tmp_path):

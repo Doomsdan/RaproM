@@ -1,0 +1,24 @@
+station:
+  id: station-id
+  name: Station Name
+  timezone: Europe/Berlin
+  location:
+    latitude: 0.0
+    longitude: 0.0
+    altitude_m: 0.0
+  instrument:
+    serial_number: ""
+    antenna_height_m: 0.0
+  paths:
+    raw_data: D:/Mrrdata/station-id
+    output: D:/Mrrdata/station-id/Processed
+  notes: ""
+
+process:
+  path: D:/Mrrdata/station-id
+  integration_time: 60
+  antenna_height: 0.0
+  output_dir: D:/Mrrdata/station-id/Processed
+  correct: true
+  calibration:
+    adjust_m: 1.0

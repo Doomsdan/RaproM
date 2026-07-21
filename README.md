@@ -61,6 +61,45 @@ Der gleiche Aufruf kann einzelne Werte gezielt ueberschreiben:
 raprom process --config raprom.example.toml --integration-time 30
 ```
 
+## Stationsdateien
+
+Grunddaten einzelner Stationen koennen als YAML-Dateien im Ordner `stations/`
+abgelegt werden. `stations/station-template.yaml` dient als Vorlage fuer neue
+Stationen:
+
+```yaml
+station:
+  id: station-a
+  name: Station A
+  timezone: Europe/Berlin
+  location:
+    latitude: 50.123
+    longitude: 8.456
+    altitude_m: 142.5
+  instrument:
+    serial_number: "0509106128"
+    antenna_height_m: 120.0
+  paths:
+    raw_data: D:/Mrrdata/station-a
+    output: D:/Mrrdata/station-a/Processed
+
+process:
+  path: D:/Mrrdata/station-a
+  integration_time: 60
+  antenna_height: 120.0
+  output_dir: D:/Mrrdata/station-a/Processed
+  correct: true
+  calibration:
+    adjust_m: 1.0
+```
+
+Der `station`-Block speichert nur die Grunddaten. Der `process`-Block kann
+direkt fuer die Verarbeitung genutzt werden:
+
+```powershell
+raprom process --config stations/station-a.yaml
+```
+
 ## Logging
 
 Die CLI schreibt Statusmeldungen ueber Python-Logging auf die Konsole. Mit
