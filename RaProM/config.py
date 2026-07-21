@@ -21,6 +21,23 @@ class ProcessConfig:
     correct: bool = True
 
 
+@dataclass
+class StationConfig:
+    """Basic metadata for an MRR station."""
+
+    id: str
+    name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    altitude: float | None = None
+    antenna_height: float | None = None
+    timezone: str | None = None
+    mrr_serial_number: str | None = None
+    raw_data_path: str | None = None
+    output_dir: str | None = None
+    notes: str | None = None
+
+
 def load_process_config(config_path: str | Path | None) -> ProcessConfig:
     """Load process configuration from a TOML, YAML, or YML file."""
     if config_path is None:
@@ -36,6 +53,20 @@ def load_process_config(config_path: str | Path | None) -> ProcessConfig:
         raise ValueError("Process config must be a mapping.")
 
     return ProcessConfig(**_normalize_process_config(process_data))
+
+
+def load_station_config(config_path: str | Path) -> StationConfig:
+    """Load station metadata from a TOML, YAML, or YML file."""
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    data = _load_mapping(path)
+    station_data = data.get("station", data)
+    if not isinstance(station_data, dict):
+        raise ValueError("Station config must be a mapping.")
+
+    return StationConfig(**_normalize_station_config(station_data))
 
 
 def merge_process_config(config: ProcessConfig, overrides: dict[str, Any]) -> ProcessConfig:
@@ -88,5 +119,51 @@ def _normalize_process_config(data: dict[str, Any]) -> dict[str, Any]:
     unknown = sorted(set(config) - allowed)
     if unknown:
         raise ValueError(f"Unknown process config option(s): {', '.join(unknown)}")
+
+    return config
+
+
+def _normalize_station_config(data: dict[str, Any]) -> dict[str, Any]:
+    config = dict(data)
+
+    location = config.pop("location", None)
+    if isinstance(location, dict):
+        for source, target in (
+            ("latitude", "latitude"),
+            ("longitude", "longitude"),
+            ("altitude", "altitude"),
+            ("altitude_m", "altitude"),
+        ):
+            if source in location and target not in config:
+                config[target] = location[source]
+
+    instrument = config.pop("instrument", None)
+    if isinstance(instrument, dict):
+        for source, target in (
+            ("serial_number", "mrr_serial_number"),
+            ("mrr_serial_number", "mrr_serial_number"),
+            ("antenna_height", "antenna_height"),
+            ("antenna_height_m", "antenna_height"),
+        ):
+            if source in instrument and target not in config:
+                config[target] = instrument[source]
+
+    paths = config.pop("paths", None)
+    if isinstance(paths, dict):
+        for source, target in (
+            ("raw_data", "raw_data_path"),
+            ("raw_data_path", "raw_data_path"),
+            ("output", "output_dir"),
+            ("output_dir", "output_dir"),
+        ):
+            if source in paths and target not in config:
+                config[target] = paths[source]
+
+    allowed = {field.name for field in fields(StationConfig)}
+    unknown = sorted(set(config) - allowed)
+    if unknown:
+        raise ValueError(f"Unknown station config option(s): {', '.join(unknown)}")
+    if not config.get("id"):
+        raise ValueError("Station config requires station.id.")
 
     return config

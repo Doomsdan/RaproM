@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from .config import load_process_config, load_station_config
+
 
 LOGGER_NAME = "raprom"
 
@@ -37,12 +39,72 @@ class FileProgress:
     path: Path
 
 
+@dataclass(frozen=True)
+class GuiConfigValues:
+    """Values loaded from a process or station configuration file."""
+
+    input_path: str = ""
+    integration_time: str = ""
+    antenna_height: str = ""
+    adjust_m: str = ""
+    output_dir: str = ""
+    correct: bool | None = None
+
+
 def parse_optional_float(value: str, default: float = math.nan) -> float:
     """Return *default* for empty text, otherwise parse a float."""
     text = value.strip()
     if not text:
         return default
     return float(text.replace(",", "."))
+
+
+def format_optional_number(value: float | int | None) -> str:
+    """Return an empty string for missing values, otherwise a stable text value."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    return str(value)
+
+
+def load_gui_config_values(config_path: str | Path) -> GuiConfigValues:
+    """Load GUI field values from a YAML/TOML process or station config."""
+    station_config = None
+    process_config = None
+    station_error = None
+    process_error = None
+
+    try:
+        station_config = load_station_config(config_path)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        station_error = exc
+
+    try:
+        process_config = load_process_config(config_path)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        process_error = exc
+
+    if station_config is None and process_config is None:
+        raise ValueError(f"Konfiguration konnte nicht geladen werden: {process_error or station_error}")
+
+    values = GuiConfigValues()
+    if station_config is not None:
+        values = GuiConfigValues(
+            input_path=station_config.raw_data_path or "",
+            antenna_height=format_optional_number(station_config.antenna_height),
+            output_dir=station_config.output_dir or "",
+        )
+    if process_config is not None:
+        values = GuiConfigValues(
+            input_path=process_config.path or values.input_path,
+            integration_time=format_optional_number(process_config.integration_time) or values.integration_time,
+            antenna_height=format_optional_number(process_config.antenna_height) or values.antenna_height,
+            adjust_m=format_optional_number(process_config.adjust_m) or values.adjust_m,
+            output_dir=process_config.output_dir or values.output_dir,
+            correct=process_config.correct,
+        )
+    return values
 
 
 def build_process_settings(
@@ -192,6 +254,7 @@ class RapromGui(tk.Tk):
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="RaProM Datenverarbeitung", style="Header.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(header, textvariable=self.status, style="Status.TLabel").grid(row=0, column=1, sticky="e")
+        ttk.Button(header, text="YAML laden", command=self._load_config_file).grid(row=0, column=2, sticky="e", padx=(12, 0))
 
         notebook = ttk.Notebook(root)
         notebook.grid(row=1, column=0, sticky="nsew")
@@ -279,6 +342,34 @@ class RapromGui(tk.Tk):
         path = filedialog.askdirectory(title="Zielordner auswaehlen")
         if path:
             self.output_dir.set(path)
+
+    def _load_config_file(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Stations- oder Prozessdatei laden",
+            filetypes=[("Konfiguration", "*.yaml *.yml *.toml"), ("YAML", "*.yaml *.yml"), ("TOML", "*.toml"), ("Alle Dateien", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            values = load_gui_config_values(path)
+        except ValueError as exc:
+            messagebox.showerror("Konfiguration laden", str(exc))
+            return
+
+        if values.input_path:
+            self.input_path.set(values.input_path)
+        if values.output_dir:
+            self.output_dir.set(values.output_dir)
+        if values.integration_time:
+            self.integration_time.set(values.integration_time)
+        if values.antenna_height:
+            self.antenna_height.set(values.antenna_height)
+        if values.adjust_m:
+            self.adjust_m.set(values.adjust_m)
+        if values.correct is not None:
+            self.correct.set(values.correct)
+        self.status.set(f"Konfiguration geladen: {Path(path).name}")
 
     def _start_processing(self) -> None:
         try:
